@@ -1,0 +1,23 @@
+{
+  "name": "void-library",
+  "version": "1.0.0",
+  "description": "虚空图书馆桌面应用的源码、回归测试与打包工具",
+  "private": true,
+  "main": "app/main.js",
+  "scripts": {
+    "check": "node scripts/check.cjs",
+    "test": "node scripts/test.cjs",
+    "build": "node scripts/build.cjs",
+    "build:portable": "node scripts/build.cjs --portable",
+    "smoke": "node scripts/smoke.cjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@electron/asar": "^4.3.1",
+    "jsdom": "^30.1.1",
+    "pinyin-pro": "^3.29.4"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "void-library",
+  "version": "2.0.0",
+  "description": "虚空图书馆 - 娱乐拥有与通关记录（本地桌面版）",
+  "main": "main.js",
+  "author": "void-library",
+  "license": "MIT"
+}

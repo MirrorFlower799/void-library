@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>虚空图书馆 - 娱乐拥有与通关记录</title>
+<meta name="description" content="添加拥有的电子游戏，书籍，影音或其他，标记通关/游玩进度与评分。数据本地保存。">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="app">
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-emoji">📚</div>
+      <div class="brand-name">虚空图书馆</div>
+      <div class="brand-sub">娱乐拥有与通关记录</div>
+    </div>
+    <p class="brand-desc">添加拥有的电子游戏，书籍，影音或其他，标记通关/游玩进度与评分。</p>
+    <nav class="nav">
+      <button class="nav-btn active" data-page="library">🗂 收藏库</button>
+      <button class="nav-btn" data-page="characters">🎭 角色卡片</button>
+      <button class="nav-btn" data-page="arts">📚 书库</button>
+      <button class="nav-btn" data-page="shots">🖼 截图</button>
+      <button class="nav-btn" data-page="stats">📊 统计</button>
+    </nav>
+    <!-- 仅资料集页面显示：书架操作与系列树 -->
+    <div class="sidebar-shelf hidden" id="sidebarShelf">
+      <div class="shelf-side-tools">
+        <button class="btn btn-outline btn-sm" id="shelfNewBtn" title="新建系列">＋ 系列</button>
+        <button class="btn btn-primary btn-sm" id="bookImportFileBtn">＋ 导入</button>
+        <button class="btn btn-outline btn-sm" id="libClearBtn" title="清空书库">🗑 清空</button>
+      </div>
+      <div class="shelf-tree" id="shelfTree"></div>
+      <div class="shelf-side-foot" id="shelfStats"></div>
+    </div>
+    <div class="sidebar-foot"><span class="dir" id="dataDirHint"></span></div>
+  </aside>
+
+  <!-- 内容区 -->
+  <main class="content">
+    <!-- 页面：收藏库 -->
+    <section class="page" id="page-library">
+    <!-- 筛选与操作 -->
+    <div class="filters">
+    <!-- 分类 -->
+    <div class="filter-row" id="categoryRow">
+      <span class="row-label">分类：</span>
+      <span class="pill active" data-category="all">全部</span>
+      <span class="pill" data-category="电子游戏">电子游戏</span>
+    </div>
+
+    <!-- 状态（动态生成，允许自定义） -->
+    <div class="filter-row" id="statusRow">
+      <span class="row-label">状态：</span>
+      <span class="pill active" data-status="all">全部状态</span>
+    </div>
+
+    <!-- 平台（动态生成） -->
+    <div class="filter-row" id="platformRow">
+      <span class="row-label">平台：</span>
+      <span class="pill active" data-platform="all">全部平台</span>
+    </div>
+
+    <!-- 系列（动态生成） -->
+    <div class="filter-row" id="seriesRow">
+      <span class="row-label">系列：</span>
+      <span class="pill pill-series active" data-series="all">全部系列</span>
+      <span class="pill pill-series" data-series="__uncat__">未分类</span>
+    </div>
+
+    <!-- 搜索 / 排序 / 操作 -->
+    <div class="filter-row">
+      <input type="text" id="searchInput" class="search-input" placeholder="🔍 搜索名称 / 平台 / 系列 / 备注...">
+      <select id="sortSelect" class="compact">
+        <option value="date-desc">最近添加</option>
+        <option value="date-asc">最早添加</option>
+        <option value="name-asc">名称 A-Z</option>
+        <option value="name-desc">名称 Z-A</option>
+        <option value="rating-desc">评分高→低</option>
+        <option value="hours-desc">时长高→低</option>
+        <option value="completed-desc">通关时间 新→旧</option>
+        <option value="completed-asc">通关时间 旧→新</option>
+      </select>
+      <button class="btn btn-outline btn-sm" id="randomBtn">🎲 随机推荐</button>
+      <div class="spacer">
+        <button class="btn btn-outline btn-sm" id="settingsBtn">⚙ 设置</button>
+        <button class="btn btn-primary btn-sm" id="addBtn">＋ 添加</button>
+        <button class="btn btn-outline btn-sm" id="exportBtn">⬇ 导出</button>
+        <button class="btn btn-outline btn-sm" id="importBtn">⬆ 导入</button>
+        <button class="btn btn-outline btn-sm" id="batchCoverBtn">🔍 批量补封面</button>
+        <button class="btn btn-outline btn-sm" id="clearBtn">🗑 清空</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 卡片网格 -->
+  <div class="game-grid" id="gameGrid"></div>
+
+  <!-- 空状态 -->
+  <div class="empty hidden" id="emptyState">
+    <div class="big">👻</div>
+    <h3>还没有收藏任何内容</h3>
+    <p>点击下方按钮，开始记录你的收藏吧！</p>
+    <button class="btn btn-primary" id="emptyAddBtn">＋ 添加第一条记录</button>
+  </div>
+
+      <div class="empty hidden" id="noResult">
+        <div class="big">🔍</div>
+        <h3>没有匹配的记录</h3>
+        <p>尝试调整筛选条件或搜索关键词</p>
+      </div>
+    </section>
+
+    <!-- 页面：统计 -->
+    <section class="page hidden" id="page-stats">
+      <h2 class="page-heading">📊 统计</h2>
+
+      <div class="stats">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#eff6ff;color:#4f6ef7;">📚</div>
+          <div><div class="stat-label">总收藏</div><div class="stat-value" id="statTotal">0</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#f0fdf4;color:#22c55e;">🏆</div>
+          <div><div class="stat-label">已通关</div><div class="stat-value" id="statCompleted">0</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fffbeb;color:#f59e0b;">▶️</div>
+          <div><div class="stat-label">进行中</div><div class="stat-value" id="statPlaying">0</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:#fef2f2;color:#ef4444;">🚫</div>
+          <div><div class="stat-label">已弃坑</div><div class="stat-value" id="statDropped">0</div></div>
+        </div>
+        <div class="stat-card wide">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span class="stat-label">通关率</span>
+            <span style="font-weight:700;font-size:1rem;" id="statRate">0%</span>
+          </div>
+          <div class="progress"><i id="progressBar"></i></div>
+          <div class="stat-label">⏱ 总时长 <b id="statHours">0 小时</b></div>
+        </div>
+      </div>
+
+      <h3 class="stats-sub">⏱ 时长分析</h3>
+      <div class="stats">
+        <div class="stat-card"><div class="stat-icon" style="background:#eef2ff;color:#4f6ef7;">⏳</div>
+          <div><div class="stat-label">平均时长</div><div class="stat-value" id="statAvg">0</div></div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#ecfdf5;color:#22c55e;">✅</div>
+          <div><div class="stat-label">已通关平均时长</div><div class="stat-value" id="statAvgDone">0</div></div></div>
+        <div class="stat-card"><div class="stat-icon" style="background:#fff7ed;color:#f59e0b;">📋</div>
+          <div><div class="stat-label">待玩（未通关）</div><div class="stat-value" id="statBacklog">0</div></div></div>
+        <div class="stat-card wide"><div class="stat-label">最长时长</div>
+          <div style="font-weight:600;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" id="statLongest">—</div></div>
+      </div>
+
+      <h3 class="stats-sub">🗂 分布</h3>
+      <div class="stats-grid2">
+        <div class="panel"><div class="panel-title">状态占比</div><div id="chartStatus"></div></div>
+        <div class="panel"><div class="panel-title">分类占比</div><div id="chartCategory"></div></div>
+      </div>
+      <div class="stats-grid2" style="margin-top:12px;">
+        <div class="panel"><div class="panel-title">评分分布</div><div id="chartRating"></div></div>
+        <div class="panel">
+          <div class="panel-head">
+            <div class="panel-title">平台数量</div>
+            <select id="platformScope" class="compact"></select>
+          </div>
+          <div class="bars" id="statsByPlatform"></div>
+        </div>
+      </div>
+
+      <h3 class="stats-sub">📈 趋势</h3>
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">每月通关</div>
+          <div class="trend-controls">
+            <select id="trendYear" class="compact"></select>
+          </div>
+        </div>
+        <div id="chartCompleted"></div>
+        <p class="trend-summary" id="trendSummary"></p>
+      </div>
+
+      <h3 class="stats-sub">🕒 最近</h3>
+      <div class="panel">
+        <div class="panel-head">
+          <div class="panel-title">最近通关</div>
+          <select id="recentDoneScope" class="compact"></select>
+        </div>
+        <div class="recent-list" id="statsRecentDone"></div>
+      </div>
+    </section>
+
+    <!-- 页面：截图 -->
+    <section class="page hidden" id="page-shots">
+      <div class="page-head-row">
+        <h2 class="page-heading">🖼 截图</h2>
+        <select id="shotsScope" class="compact"></select>
+      </div>
+      <div class="shots-toolbar">
+        <input type="text" id="shotsSearch" class="search-input" placeholder="🔍 搜索游戏名称...">
+        <button class="btn btn-outline btn-sm" id="shotsImportBtn">📂 扫描文件夹</button>
+        <button class="btn btn-outline btn-sm" id="shotsClearBtn">🗑 清空</button>
+      </div>
+      <div class="shots-gallery" id="shotsGallery"></div>
+      <input type="file" id="shotsPageFile" accept="image/*" multiple class="hidden">
+    </section>
+
+    <!-- 页面：角色卡片 -->
+    <section class="page hidden" id="page-characters">
+      <div class="page-head-row">
+        <h2 class="page-heading">🎭 角色卡片</h2>
+        <input type="text" id="charSearch" class="search-input" placeholder="🔍 搜索角色 / 作品...">
+        <button class="btn btn-outline btn-sm" id="charBatchBtn">📥 批量导入</button>
+        <button class="btn btn-outline btn-sm" id="charClearBtn">🗑 清空</button>
+        <button class="btn btn-primary btn-sm" id="charAddBtn">＋ 添加角色</button>
+      </div>
+      <div class="char-grid" id="charGrid"></div>
+      <div class="empty hidden" id="charEmpty">
+        <div class="big">🎭</div>
+        <h3>还没有角色卡片</h3>
+        <p>点击「＋ 添加角色」，记录角色与对应图片。</p>
+      </div>
+    </section>
+
+    <!-- 页面：角色图集（整页） -->
+    <section class="page hidden" id="page-charGallery">
+      <div class="page-head-row">
+        <div class="row" style="align-items:center;">
+          <button class="btn btn-outline btn-sm" id="cgBackBtn">← 返回</button>
+          <h2 class="page-heading" id="charGalleryTitle">图集</h2>
+        </div>
+        <div class="row">
+          <button class="btn btn-outline btn-sm" id="cgAddBtn">＋ 添加图片</button>
+          <button class="btn btn-outline btn-sm" id="cgFolderBtn">📂 文件夹</button>
+        </div>
+      </div>
+      <p class="random-hint" id="cgHint" style="margin:0 0 12px;"></p>
+      <div class="char-gallery" id="charGallery"></div>
+      <input type="file" id="cgFile" accept="image/*" multiple class="hidden">
+    </section>
+
+    <!-- 页面：游戏截图图集（整页） -->
+    <section class="page hidden" id="page-gameShots">
+      <div class="page-head-row">
+        <div class="row" style="align-items:center;">
+          <button class="btn btn-outline btn-sm" id="gshBackBtn">← 返回</button>
+          <h2 class="page-heading" id="gameShotsTitle">截图</h2>
+        </div>
+        <div class="row">
+          <button class="btn btn-outline btn-sm" id="gshAddBtn">＋ 添加图片</button>
+          <button class="btn btn-outline btn-sm" id="gshFolderBtn">📂 文件夹</button>
+        </div>
+      </div>
+      <p class="random-hint" id="gshHint" style="margin:0 0 12px;"></p>
+      <div class="char-gallery" id="gameShots"></div>
+      <input type="file" id="gshFile" accept="image/*" multiple class="hidden">
+    </section>
+
+    <!-- 页面：资料集 -->
+    <section class="page hidden" id="page-arts">
+      <div class="shelf-main">
+        <div class="shelf-crumbs">
+          <button class="btn btn-outline btn-sm" id="shelfBackBtn">← 返回</button>
+          <button class="btn btn-outline btn-sm" id="shelfUpBtn">↑ 上一级</button>
+          <span id="shelfCrumb" class="crumb"></span>
+          <span class="crumb-count" id="shelfCount"></span>
+        </div>
+        <div class="shelf-main-tools">
+          <input type="text" id="bookSearch" class="search-input" placeholder="🔍 搜索书名 / 词条...">
+          <select id="bookStatusFilter" class="compact"></select>
+          <select id="bookTagFilter" class="compact"></select>
+          <button class="btn btn-outline btn-sm hidden" id="bookClearFilter">✕ 清除筛选</button>
+        </div>
+        <div class="import-bar hidden" id="importBar"><span id="importBarFill"></span><span class="import-text" id="importText"></span></div>
+        <div class="book-grid" id="bookGrid"></div>
+        <div class="empty hidden" id="bookEmpty">
+          <div class="big">📚</div>
+          <h3>这里还没有内容</h3>
+          <p>用左侧的「＋ 系列 / 导入文件 / 文件夹」添加；右键条目可阅读、编辑、移动、删除。</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ============ 角色卡片 弹窗 ============ -->
+<div class="modal-overlay" id="charModal">
+  <div class="modal-box" style="max-width:520px;">
+    <div class="modal-head">
+      <h2 id="charModalTitle">添加角色</h2>
+      <button class="icon-btn" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid" style="grid-template-columns:1fr;">
+        <div class="field">
+          <label>角色名 <span class="req">*</span></label>
+          <input type="text" id="cName" placeholder="角色名称" maxlength="60">
+        </div>
+        <div class="field">
+          <label>作品 / 系列</label>
+          <input type="text" id="cWork" placeholder="所属作品或系列" maxlength="80">
+        </div>
+        <div class="field">
+          <label>角色图片</label>
+          <div class="cover-field">
+            <div class="cover-preview" id="cPreview"><span class="cover-empty">无图片</span></div>
+            <div class="cover-actions">
+              <div class="row">
+                <button type="button" class="btn btn-outline btn-sm" id="cUploadBtn">📁 选择图片</button>
+                <button type="button" class="btn btn-outline btn-sm" id="csOpenBtn">🔍 角色图片刮削</button>
+                <button type="button" class="btn btn-outline btn-sm" id="cRemoveBtn">✕ 移除图片</button>
+              </div>
+              <div class="hint">支持 JPG / PNG / WebP，保持原始比例。</div>
+            </div>
+          </div>
+          <input type="file" id="cFile" accept="image/*" class="hidden">
+        </div>
+        <div class="field full">
+          <label>角色图集 <span style="font-weight:400;color:#94a3b8;">（点击卡片封面进入图集）</span></label>
+          <div class="shots-field">
+            <div class="shots-grid" id="cShotsGrid"></div>
+            <div class="row">
+              <button type="button" class="btn btn-outline btn-sm" id="cShotsAddBtn">＋ 添加图片</button>
+              <button type="button" class="btn btn-outline btn-sm" id="cShotsFolderBtn">📂 文件夹</button>
+              <button type="button" class="btn btn-outline btn-sm" id="cImgSearchBtn">🔍 图集搜索</button>
+            </div>
+            <div class="hint">刮削用于设置角色图片（封面）；图集可手动添加或从文件夹导入。</div>
+          </div>
+          <input type="file" id="cShotsFile" accept="image/*" multiple class="hidden">
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" data-close>取消</button>
+      <button class="btn btn-primary" id="cSaveBtn">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 角色刮削 弹窗 ============ -->
+<div class="modal-overlay lv2" id="charScrapeModal">
+  <div class="modal-box" style="max-width:640px;">
+    <div class="modal-head">
+      <h2>🔍 角色刮削</h2>
+      <button class="icon-btn" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="scrape-searchbar">
+        <input type="text" id="csQuery" placeholder="角色名（中文或原名）" autocomplete="off">
+        <input type="text" id="csWork" placeholder="作品/系列（可选，用于缩小范围）" autocomplete="off">
+        <button class="btn btn-primary btn-sm" id="csSearchBtn">搜索</button>
+      </div>
+      <div class="scrape-sources" id="csSources">
+        <span class="pill active" data-source="bgm-char">Bangumi 角色</span>
+        <span class="pill" data-source="vndb-char">VNDB 角色</span>
+      </div>
+      <p class="random-hint" id="csHint">可填写作品/系列缩小范围；点击结果，再点击图片设为该角色图片。</p>
+      <div class="scrape-results" id="csResults"></div>
+      <div class="scrape-assets" id="csAssets"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" data-close>关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 角色图片搜索 弹窗 ============ -->
+<div class="modal-overlay lv2" id="charImgSearchModal">
+  <div class="modal-box" style="max-width:720px;">
+    <div class="modal-head">
+      <h2>🔍 搜索角色图片（Pixiv / Google 图片）</h2>
+      <button class="icon-btn" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="scrape-searchbar">
+        <input type="text" id="ciQuery" placeholder="搜索词（可手动修改角色名等）" autocomplete="off">
+        <button class="btn btn-primary btn-sm" id="ciOpenBtn">在浏览器打开 Pixiv 搜索</button>
+      </div>
+      <p class="random-hint" id="ciHint">将自动跳转到系统浏览器的 Pixiv 搜索页面；下载好图片后，用图集里的「＋ 添加图片」手动加入。</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" data-close>关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 角色批量导入 弹窗 ============ -->
+<div class="modal-overlay" id="charBatchModal">
+  <div class="modal-box" style="max-width:680px;">
+    <div class="modal-head">
+      <h2>📥 批量导入角色</h2>
+      <button class="icon-btn" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="scrape-searchbar">
+        <input type="text" id="cbWork" placeholder="作品 / 系列名称" autocomplete="off">
+        <button class="btn btn-primary btn-sm" id="cbSearchBtn">查询</button>
+      </div>
+      <div class="scrape-sources" id="cbSources">
+        <span class="pill active" data-source="bgm-char">Bangumi</span>
+        <span class="pill" data-source="vndb-char">VNDB</span>
+      </div>
+      <p class="random-hint" id="cbHint">输入作品/系列名称，查询该作品下的全部角色，勾选后导入。</p>
+      <div class="cb-list" id="cbList"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" data-close>取消</button>
+      <button class="btn btn-primary" id="cbImportBtn">导入所选</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 系列 弹窗 ============ -->
+<div class="modal-overlay" id="shelfModal">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-head">
+      <h2 id="shelfModalTitle">新建系列</h2>
+      <button class="icon-btn" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>系列名称</label>
+        <input type="text" id="shelfName" placeholder="如 某某作品系列" maxlength="60">
+        <div class="hint" id="shelfParentHint"></div>
+      </div>
+      <div class="field">
+        <label>系列词条 <span style="font-weight:400;color:#94a3b8;">（回车添加，该系列内所有书籍共享）</span></label>
+        <div class="tag-box" id="shTagsBox">
+          <div class="tag-chips" id="shTagChips"></div>
+          <input type="text" id="shTags" class="tag-field" placeholder="输入词条后回车…" autocomplete="off">
+          <div class="ac-list hidden" id="shTagSuggest"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" data-close>取消</button>
+      <button class="btn btn-primary" id="shelfSaveBtn">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 书籍信息 弹窗 ============ -->
+<div class="modal-overlay" id="bookModal">
+  <div class="modal-box" style="max-width:520px;">
+    <div class="modal-head">
+      <h2 id="bookModalTitle">编辑信息</h2>
+      <button class="icon-btn" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+        <div class="field full">
+          <label>书名</label>
+          <input type="text" id="bkTitle" maxlength="120">
+        </div>
+        <div class="field">
+          <label>状态</label>
+          <select id="bkStatus">
+            <option value="">未设置</option>
+            <option value="想读">想读</option>
+            <option value="在读">在读</option>
+            <option value="已读">已读</option>
+          </select>
+        </div>
+        <div class="field full">
+          <label>词条 / 标签 <span style="font-weight:400;color:#94a3b8;">（回车添加，可多个）</span></label>
+          <div class="tag-box" id="bkTagsBox">
+            <div class="tag-chips" id="bkTagChips"></div>
+            <input type="text" id="bkTags" class="tag-field" placeholder="输入词条后回车…" autocomplete="off">
+            <div class="ac-list hidden" id="bkTagSuggest"></div>
+          </div>
+        </div>
+        <div class="field full">
+          <label>所属系列</label>
+          <select id="bkShelf"></select>
+        </div>
+      </div>
+      <p class="random-hint" id="bkPath"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" data-close>取消</button>
+      <button class="btn btn-primary" id="bookSaveBtn">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 移动到系列 弹窗 ============ -->
+<div class="modal-overlay" id="moveModal">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-head">
+      <h2>移动到系列</h2>
+      <button class="icon-btn" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>目标系列</label>
+        <select id="moveShelf"></select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" data-close>取消</button>
+      <button class="btn btn-primary" id="moveSaveBtn">移动</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 书架右键菜单 ============ -->
+<div class="popmenu hidden" id="bookCtxMenu"></div>
+
+<!-- ============ 添加/编辑 弹窗 ============ -->
+<div class="modal-overlay" id="gameModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2 id="modalTitle">添加</h2>
+      <button class="icon-btn" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="field span2">
+          <label>名称 <span class="req">*</span></label>
+          <input type="text" id="fName" placeholder="输入名称" maxlength="80">
+        </div>
+        <div class="field">
+          <label>刮削名称 <span class="field-note">（可选，优先搜索）</span></label>
+          <input type="text" id="fScrapeName" placeholder="用于搜索封面，不影响显示名称" maxlength="160">
+        </div>
+
+        <div class="field">
+          <label>分类 <span style="font-weight:400;color:#94a3b8;">（可自定义）</span></label>
+          <input type="text" id="fCategory" list="categorySuggest" placeholder="如 电子游戏 / 书籍 / 影音" maxlength="30" autocomplete="off">
+          <datalist id="categorySuggest"></datalist>
+        </div>
+        <div class="field">
+          <label>平台 <span style="font-weight:400;color:#94a3b8;">（跟随分类）</span></label>
+          <input type="text" id="fPlatform" placeholder="填写平台 / 载体" maxlength="40" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>系列 <span style="font-weight:400;color:#94a3b8;">（跟随分类，可用 / 、 分隔多个）</span></label>
+          <input type="text" id="fSeries" placeholder="如 魂系列/宫崎英高" maxlength="60" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>状态 <span style="font-weight:400;color:#94a3b8;">（可自定义，可不选）</span></label>
+          <input type="text" id="fStatus" list="statusSuggest" placeholder="如 进行中 / 已通关" maxlength="20" autocomplete="off">
+          <datalist id="statusSuggest"></datalist>
+        </div>
+        <div class="field">
+          <label>评分</label>
+          <div class="star-input" id="starInput">
+            <span data-star="1">★</span><span data-star="2">★</span><span data-star="3">★</span>
+            <span data-star="4">★</span><span data-star="5">★</span>
+          </div>
+        </div>
+
+        <div class="field span2">
+          <label>时长</label>
+          <div class="duration-input">
+            <input type="number" id="fHours" min="0" step="1" placeholder="0" inputmode="numeric">
+            <span class="unit">小时</span>
+            <span class="sep">·</span>
+            <input type="number" id="fMinutes" min="0" max="59" step="1" placeholder="0" inputmode="numeric">
+            <span class="unit">分钟</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>通关日期</label>
+          <input type="date" id="fDate">
+        </div>
+
+
+        <div class="field full">
+          <label>封面图片</label>
+          <div class="cover-field">
+            <div class="cover-preview" id="coverPreview">
+              <span class="cover-empty">无封面</span>
+            </div>
+            <div class="cover-actions">
+              <div class="row">
+                <button type="button" class="btn btn-outline btn-sm" id="coverUploadBtn">📁 选择图片</button>
+                <button type="button" class="btn btn-primary btn-sm" id="itemScrapeBtn">🔍 在线刮削</button>
+                <button type="button" class="btn btn-outline btn-sm" id="coverRemoveBtn">✕ 移除封面</button>
+              </div>
+              <div class="hint">支持 JPG / PNG / WebP。上传或刮削后可拖动画面调整位置、滚轮或滑块缩放，最终按 16:9 裁剪保存。</div>
+            </div>
+          </div>
+          <input type="file" id="coverFile" accept="image/*" class="hidden">
+        </div>
+
+        <div class="field full">
+          <label>截图 <span style="font-weight:400;color:#94a3b8;">（可多张，保持原始比例）</span></label>
+          <div class="shots-field">
+            <div class="shots-grid" id="shotsGrid"></div>
+            <div class="row">
+              <button type="button" class="btn btn-outline btn-sm" id="shotsAddBtn">🖼 添加截图</button>
+              <button type="button" class="btn btn-outline btn-sm" id="shotsFolderBtn">📂 从文件夹导入</button>
+            </div>
+            <div class="hint">可手动上传、从文件夹批量导入，也可在「在线刮削」时把任意图片加入截图。</div>
+          </div>
+          <input type="file" id="shotsFile" accept="image/*" multiple class="hidden">
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" data-close>取消</button>
+      <button class="btn btn-primary" id="saveBtn">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 备份导入方式 ============ -->
+<div class="modal-overlay" id="importModeModal">
+  <div class="modal-box sm">
+    <div class="modal-head"><h2>导入收藏备份</h2><button class="icon-btn" data-close>✕</button></div>
+    <div class="modal-body">
+      <p id="importPreviewInfo" class="modal-description"></p>
+      <label class="import-option"><input type="radio" name="importMode" value="merge" checked><span><strong>追加到当前收藏</strong><small>按条目 ID 跳过重复记录，保留现有条目、封面和截图</small></span></label>
+      <label class="import-option"><input type="radio" name="importMode" value="replace"><span><strong>覆盖现有数据</strong><small>用备份替换收藏记录；备份含角色和书库时同时替换对应内容</small></span></label>
+      <div class="hint" id="importModeHint">建议先导出当前备份，以便恢复。</div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-outline" data-close>取消</button><button class="btn btn-primary" id="importApplyBtn">确认导入</button></div>
+  </div>
+</div>
+
+<!-- ============ 批量补封面 ============ -->
+<div class="modal-overlay" id="batchCoverModal">
+  <div class="modal-box" style="max-width:600px;">
+    <div class="modal-head"><h2>🔍 批量刮削无封面条目</h2><button class="icon-btn" data-close>✕</button></div>
+    <div class="modal-body">
+      <div class="field">
+        <label>图片来源</label>
+        <select id="batchCoverSource">
+          <option value="auto">按分类自动选择（电子游戏 SteamGridDB，影音 TMDB 等）</option>
+          <option value="steamgriddb">SteamGridDB（游戏）</option>
+          <option value="tmdb">TMDB（电影/剧集）</option>
+          <option value="bangumi">Bangumi（番剧）</option>
+          <option value="vndb">VNDB（视觉小说）</option>
+        </select>
+      </div>
+      <p class="hint">仅处理尚无封面的收藏；优先使用条目的「刮削名称」，否则使用显示名称。仅自动应用名称准确匹配的结果，不会修改标题、评分或截图。</p>
+      <div id="batchCoverSummary" class="batch-cover-summary"></div>
+      <progress id="batchCoverProgress" max="1" value="0" class="batch-cover-progress"></progress>
+      <div id="batchCoverLog" class="batch-cover-log" aria-live="polite"></div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-outline" id="batchCoverCancel">停止</button>
+      <button type="button" class="btn btn-primary" id="batchCoverStart">开始补全</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 裁剪器 弹窗 ============ -->
+<div class="modal-overlay lv2" id="cropModal">
+  <div class="modal-box" style="max-width:560px;">
+    <div class="modal-head">
+      <h2>调整封面</h2>
+      <button class="icon-btn" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="crop-stage" id="cropStage">
+        <img id="cropImg" alt="" draggable="false">
+        <div class="crop-grid"></div>
+      </div>
+      <div class="crop-controls">
+        <span class="crop-label">缩放</span>
+        <input type="range" id="cropZoom" min="1" max="4" step="0.01" value="1">
+        <button class="btn btn-outline btn-sm" id="cropReset">重置</button>
+      </div>
+      <p class="crop-hint">🖱 拖动画面调整位置 · 滚轮或滑块缩放</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" data-close>取消</button>
+      <button class="btn btn-primary" id="cropConfirm">确定应用</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 删除确认 弹窗 ============ -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal-box sm">
+    <div class="confirm-body">
+      <div class="confirm-icon">⚠️</div>
+      <h3>确认删除？</h3>
+      <p id="deleteName"></p>
+      <p>此操作不可恢复</p>
+    </div>
+    <div class="modal-foot" style="justify-content:center;">
+      <button class="btn btn-outline btn-sm" data-close>取消</button>
+      <button class="btn btn-danger btn-sm" id="confirmDeleteBtn">确认删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 随机推荐 弹窗 ============ -->
+<div class="modal-overlay" id="randomModal">
+  <div class="modal-box" style="max-width:560px;">
+    <div class="modal-head">
+      <h2>🎲 随机推荐</h2>
+      <button class="icon-btn" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="random-filters">
+        <div class="field"><label>分类</label><select id="rCategory"></select></div>
+        <div class="field"><label>平台</label><select id="rPlatform"></select></div>
+        <div class="field"><label>系列</label><select id="rSeries"></select></div>
+        <div class="field"><label>状态</label><select id="rStatus"></select></div>
+        <div class="field"><label>最低评分</label><select id="rMinRating"></select></div>
+      </div>
+      <label class="check-line"><input type="checkbox" id="rExcludeDone" checked> 排除「已通关 / 全成就 / 弃坑」</label>
+      <p class="random-hint" id="rPoolHint"></p>
+      <div class="random-result">
+        <div class="random-pick" id="randomPick">
+          <p class="random-empty">设置条件后点击「抽取」</p>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" data-close>关闭</button>
+      <button class="btn btn-primary" id="repickBtn">🔄 抽取</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 设置 弹窗 ============ -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal-box" style="max-width:560px;">
+    <div class="modal-head">
+      <h2>⚙ 设置</h2>
+      <button class="icon-btn" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid" style="grid-template-columns:1fr;">
+        <div class="field full">
+          <label>SteamGridDB API Key</label>
+          <input type="text" id="sSgdbKey" placeholder="用于游戏封面搜索" autocomplete="off">
+          <div class="hint">获取：steamgriddb.com → Preferences → API。</div>
+        </div>
+        <div class="field full">
+          <label>TMDB API Key</label>
+          <input type="text" id="sTmdbKey" placeholder="用于影视海报 / 剧照搜索" autocomplete="off">
+          <div class="hint">获取：themoviedb.org → 设置 → API（API Key v3）。</div>
+        </div>
+        <div class="field full">
+          <label>Bangumi Access Token（可选）</label>
+          <input type="text" id="sBangumiToken" placeholder="用于番剧条目标题 / 封面搜索" autocomplete="off">
+          <div class="hint">可在 next.bgm.tv 生成；不填也可搜索（受限）。</div>
+        </div>
+      </div>
+      <p class="random-hint" id="settingsStatus"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" data-close>取消</button>
+      <button class="btn btn-primary" id="settingsSaveBtn">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 单条目在线刮削 弹窗 ============ -->
+<div class="modal-overlay lv2" id="itemScrapeModal">
+  <div class="modal-box" style="max-width:700px;">
+    <div class="modal-head">
+      <h2>🔍 在线刮削封面</h2>
+      <button class="icon-btn" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="scrape-searchbar">
+        <input type="text" id="isQuery" placeholder="搜索名称" autocomplete="off">
+        <button class="btn btn-outline btn-sm" id="isTranslateBtn" title="中文翻译为英文">中→英</button>
+        <button class="btn btn-primary btn-sm" id="isSearchBtn">搜索</button>
+      </div>
+      <div class="scrape-sources" id="isSources">
+        <span class="pill active" data-source="steamgriddb">SteamGridDB</span>
+        <span class="pill" data-source="tmdb">TMDB</span>
+        <span class="pill" data-source="bangumi">Bangumi</span>
+        <span class="pill" data-source="vndb">VNDB</span>
+      </div>
+      <p class="random-hint" id="isHint">选择来源并搜索；点击结果，再点击要下载的图片（下载后可手动调整裁剪）。</p>
+      <div class="scrape-results" id="isResults"></div>
+      <div class="scrape-assets" id="isAssets"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" data-close>关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 截图查看 弹窗 ============ -->
+<div class="modal-overlay lv2" id="shotViewer">
+  <div class="shot-viewer-wrap">
+    <button type="button" class="shot-nav" id="shotPrev" title="上一张">‹</button>
+    <div class="shot-viewer-box"><img id="shotViewerImg" alt=""></div>
+    <button type="button" class="shot-nav" id="shotNext" title="下一张">›</button>
+    <div class="shot-counter" id="shotCounter"></div>
+    <div class="shot-viewer-actions">
+      <button type="button" class="shot-close" id="shotDelete" title="删除这张截图">🗑</button>
+      <button type="button" class="shot-close" id="shotClose" title="关闭">✕</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 导入截图文件夹 弹窗 ============ -->
+<div class="modal-overlay lv2" id="shotImportModal">
+  <div class="modal-box sm">
+    <div class="modal-head">
+      <h2>导入截图到游戏</h2>
+      <button class="icon-btn" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>选择游戏（可输入搜索）</label>
+        <input type="text" id="shotImportGame" list="shotImportList" placeholder="输入游戏名称搜索" autocomplete="off">
+        <datalist id="shotImportList"></datalist>
+      </div>
+      <p class="random-hint">选择文件夹后，其中的图片会复制到本应用的截图库并归入该游戏。</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" data-close>取消</button>
+      <button class="btn btn-primary" id="shotImportConfirm">选择文件夹并导入</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 转移截图归属 弹窗 ============ -->
+<div class="modal-overlay lv2" id="shotMoveModal">
+  <div class="modal-box sm">
+    <div class="modal-head">
+      <h2>转移截图归属</h2>
+      <button class="icon-btn" data-close>✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>目标游戏（可输入搜索）</label>
+        <input type="text" id="moveTargetName" list="moveTargetList" placeholder="输入游戏名称搜索" autocomplete="off">
+        <datalist id="moveTargetList"></datalist>
+      </div>
+      <p class="random-hint" id="moveHint"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" data-close>取消</button>
+      <button class="btn btn-primary" id="moveConfirm">转移</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 通用确认 弹窗 ============ -->
+<div class="modal-overlay lv2" id="confirmModal">
+  <div class="modal-box sm">
+    <div class="confirm-body">
+      <div class="confirm-icon">⚠️</div>
+      <h3 id="confirmTitle">确认操作？</h3>
+      <p id="confirmMsg"></p>
+    </div>
+    <div class="modal-foot" style="justify-content:center;">
+      <button class="btn btn-outline btn-sm" data-close>取消</button>
+      <button class="btn btn-danger btn-sm" id="confirmOk">确认删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 资料集 内部阅读器 ============ -->
+<div class="modal-overlay lv2" id="artViewer">
+  <div class="art-viewer-wrap" id="avWrap">
+    <!-- 顶部栏 -->
+    <div class="rv-top" id="rvTop">
+      <button type="button" class="rv-icon" id="avExit" title="退出">←</button>
+      <button type="button" class="rv-icon" id="rvTocBtn" title="目录">☰</button>
+      <div class="rv-top-mid">
+        <div class="rv-title" id="avTitle"></div>
+        <div class="rv-sub" id="avCounter"></div>
+      </div>
+      <div class="rv-progress"><i id="rvProgressFill"></i></div>
+    </div>
+
+    <!-- 左侧目录抽屉 -->
+    <div class="rv-drawer" id="rvDrawer">
+      <div class="rv-drawer-head">
+        <div class="rv-drawer-tabs" role="tablist" aria-label="阅读导航"><button type="button" class="rv-drawer-tab active" id="rvTabToc" aria-selected="true">目录</button><button type="button" class="rv-drawer-tab" id="rvTabBookmarks" aria-selected="false">书签</button></div>
+        <button type="button" class="rv-icon" id="rvDrawerClose">✕</button>
+      </div>
+      <div class="rv-toc" id="avTocList"></div>
+      <div class="rv-toc hidden" id="rvBookmarksList" aria-label="书签列表"></div>
+      <select id="avToc" class="hidden"><option value="">目录</option></select>
+    </div>
+
+    <!-- 内容 -->
+    <div class="art-viewer-body" id="avBody"></div>
+    <div class="rv-tap rv-tap-left" id="rvTapLeft"></div>
+    <div class="rv-tap rv-tap-right" id="rvTapRight"></div>
+
+    <!-- 底部栏 -->
+    <div class="rv-bottom" id="rvBottom">
+      <button type="button" class="rv-icon" id="avPrev" title="上一页">‹</button>
+      <input type="range" id="rvSlider" min="0" max="1000" value="0" title="进度">
+      <span class="rv-count" id="rvCount"></span>
+      <button type="button" class="rv-icon" id="avNext" title="下一页">›</button>
+      <button type="button" class="rv-text" id="rvAddBookmark" title="添加或移除当前页书签">☆ 书签</button>
+      <span class="rv-sp"></span>
+      <input type="number" id="avGoto" class="rv-input" min="1" placeholder="页码" title="跳转到指定页码（流式电子书按阅读位置编号）" step="1">
+      <button type="button" class="rv-text" id="avGotoBtn">跳转</button>
+      <button type="button" class="rv-text" id="rvFlow" title="翻页 / 滚动">翻页</button>
+      <button type="button" class="rv-text" id="rvColumns" title="单页 / 双页切换" aria-pressed="false">单页</button>
+      <button type="button" class="rv-text" id="avFontMinus" title="缩小">A-</button>
+      <button type="button" class="rv-text" id="avFontPlus" title="放大">A+</button>
+      <button type="button" class="rv-text" id="rvResetSize" title="恢复默认字体大小或缩放比例">重置大小</button>
+      <button type="button" class="rv-text" id="rvTheme" title="主题">☀ 浅色</button>
+      <button type="button" class="rv-text" id="avOpenBtn">系统打开</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="coverPickFile" accept="image/*" class="hidden">
+
+<!-- ============ 资料集导入菜单 ============ -->
+<div class="popmenu hidden" id="libImportMenu">
+  <button type="button" data-act="file">📄 选择文件</button>
+  <button type="button" data-act="folder">📁 选择文件夹（子文件夹成为系列）</button>
+</div>
+
+<!-- ============ 截图添加菜单 ============ -->
+<div class="popmenu hidden" id="shotAddMenu">
+  <button type="button" data-act="file">🖼 选择图片</button>
+  <button type="button" data-act="folder">📂 从文件夹导入</button>
+</div>
+
+<div id="gcToast"></div>
+
+<script src="pinyin-pro.js"></script>
+<script src="utils.js"></script>
+<script src="models.js"></script>
+<script src="charts.js"></script>
+<script src="renderer.js"></script>
+</body>
+</html>

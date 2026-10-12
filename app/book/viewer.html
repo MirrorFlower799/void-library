@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  html, body { margin: 0; height: 100%; background: #f5f6f8; }
+  foliate-view { display: block; width: 100vw; height: 100vh; }
+  #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+          font: 14px/1.6 'Microsoft YaHei', sans-serif; color: #94a3b8; }
+</style>
+</head>
+<body>
+<foliate-view id="view"></foliate-view>
+<div id="boot">正在打开…</div>
+<script type="module">
+import './vendor/foliate-js/view.js'
+
+const view = document.getElementById('view')
+const boot = document.getElementById('boot')
+const params = new URLSearchParams(location.search)
+const src = params.get('src') || ''
+const name = params.get('name') || 'book.epub'
+const type = params.get('type') || 'application/epub+zip'
+
+let fontSize = 18
+let fg = '#23272e'
+let bg = '#f5f6f8'
+let ready = false
+let fileSource = null
+let appliedStyles = ''
+let flow = 'paginated'
+let columns = 1
+let settingsFrame = null
+let navigation = Promise.resolve()
+let navigationPending = 0
+let lastPage = 0
+let lastTotalPages = 0
+let lastWheelTime = -Infinity
+let lastWheelEvent = -Infinity
+let wheelDelta = 0
+let wheelDirection = 0
+let pendingSeek = null
+let seekRunning = false
+let disposed = false
+let startupResolve
+const startupConfig = new Promise(resolve => { startupResolve = resolve })
+let startupTimer = null
+
+function styles() {
+  return 'html{font-size:' + fontSize + 'px !important;}'
+    + 'body{color:' + fg + ' !important;background:' + bg + ' !important;line-height:1.8 !important;}'
+    + 'img,svg,image,video,object{max-width:100% !important;height:auto !important;}'
+    + 'table{max-width:100% !important;}'
+}
+function applyTheme() { document.documentElement.style.background = bg; document.body.style.background = bg }
+function applyStyles() {
+  const css = styles()
+  if (css === appliedStyles) return
+  if (view.renderer && view.renderer.setStyles) { view.renderer.setStyles(css); appliedStyles = css }
+}
+function applySettings() {
+  settingsFrame = null
+  if (!ready || !view.renderer) return
+  const renderer = view.renderer
+  applyTheme()
+  applyStyles()
+  const set = (name, value) => {
+    if (renderer.getAttribute && renderer.getAttribute(name) === String(value)) return
+    if (renderer.setAttribute) renderer.setAttribute(name, String(value))
+  }
+  let change = null
+  if (view.isFixedLayout && typeof renderer.setSpread === 'function') {
+    const spread = columns === 2 ? 'both' : 'none'
+    if (renderer.spread !== spread) change = renderer.setSpread(spread)
+  } else set('max-column-count', columns)
+  set('flow', flow)
+  if (view.book?.rendition?.layout === 'pre-paginated') set('zoom', fontSize === 18 ? 'fit-page' : fontSize / 18)
+  return change
+}
+function scheduleSettings() {
+  if (ready && settingsFrame === null) settingsFrame = requestAnimationFrame(() => {
+    navigation = navigation.catch(() => {}).then(() => applySettings())
+      .catch(e => send('error', { message: String(e.message || e) }))
+  })
+}
+function pageCount() {
+  if (!view.book) return 0
+  if (view.isFixedLayout) return view.book.sections?.length || 0
+  // Reflowable EPUB/MOBI have no invariant physical page count. Foliate's
+  // fixed-size reading locations provide deterministic integer references.
+  return Math.max(1, Number(view.lastLocation?.location?.total) || 1)
+}
+function goPage(value) {
+  const total = pageCount()
+  const page = Number(value)
+  if (!Number.isSafeInteger(page) || page < 1 || page > total) return
+  if (view.isFixedLayout) return view.goTo(page - 1)
+  if (total <= 1) return view.goToFraction(0)
+  return view.goToFraction(page === total ? 1 : (page - 1) / (total - 1))
+}
+function navigate(action, value) {
+  navigationPending++
+  navigation = navigation.catch(() => {}).then(() => {
+    if (!ready) return
+    if (action === 'next') {
+      if (view.isFixedLayout && lastTotalPages && lastPage >= lastTotalPages) return
+      return view.next()
+    }
+    if (action === 'prev') {
+      if (view.isFixedLayout && lastPage <= 1 && lastTotalPages) return
+      return view.prev()
+    }
+    if (action === 'goPage') return goPage(value)
+    if (action === 'goFraction') return view.goToFraction(value)
+    if (action === 'goHref') return view.goTo(value)
+  }).catch(e => send('error', { message: String(e.message || e) }))
+    .finally(() => { navigationPending-- })
+  return navigation
+}
+async function seek(action, value) {
+  pendingSeek = { action, value }
+  if (seekRunning) return
+  seekRunning = true
+  try {
+    while (pendingSeek) {
+      const next = pendingSeek; pendingSeek = null
+      await navigate(next.action, next.value)
+    }
+  } finally { seekRunning = false }
+}
+function send(t, data) { try { parent.postMessage(Object.assign({ source: 'vl-reader', type: t }, data || {}), '*') } catch (e) { /* */ } }
+
+view.addEventListener('relocate', function (e) {
+  const d = e.detail || {}
+  const totalPages = view.isFixedLayout ? (view.book?.sections?.length || 0)
+    : (Number(d.location?.total) || 0)
+  const page = view.isFixedLayout ? (Number(d.section?.current) || 0) + 1
+    : (Number(d.location?.current) || 0) + 1
+  lastTotalPages = totalPages
+  lastPage = Math.max(1, Math.min(totalPages || 1, page))
+  send('relocate', {
+    fraction: (typeof d.fraction === 'number') ? d.fraction : 0,
+    label: (d.tocItem && d.tocItem.label) || '', cfi: d.cfi || '',
+    page: lastPage, totalPages
+  })
+})
+view.addEventListener('error', function (e) { send('error', { message: String((e && e.message) || e) }) })
+
+// Wheel events inside a Foliate content iframe do not bubble to the host window.
+// Handle them at their source as well as at the host overlay.
+function onPageWheel(e) {
+  if (!ready || disposed || !e.cancelable) return
+  if (e.ctrlKey || e.metaKey || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return
+  if (flow === 'scrolled') {
+    if (!view.isFixedLayout) return // reflowable books use their native scroll container
+    // A PDF iframe has scrolling=no, so redirect wheel input to the outer fixed layout.
+    // Preserve ordinary vertical scrolling when zoomed beyond the viewport.
+    const layout = view.renderer
+    const dy = e.deltaMode === 1 ? e.deltaY * 36 : e.deltaMode === 2 ? e.deltaY * layout.clientHeight : e.deltaY
+    const maxY = Math.max(0, layout.scrollHeight - layout.clientHeight)
+    if (maxY > 1) {
+      e.preventDefault()
+      layout.scrollTop = Math.max(0, Math.min(maxY, layout.scrollTop + dy))
+      return
+    }
+    // In fit-page mode, a fixed-layout book cannot scroll vertically;
+    // keep wheel navigation as a fallback until the user zooms in.
+  }
+  e.preventDefault()
+  const now = performance.now()
+  const direction = Math.sign(e.deltaY)
+  if (now - lastWheelEvent > 200 || direction !== wheelDirection) wheelDelta = 0
+  lastWheelEvent = now
+  wheelDirection = direction
+  wheelDelta += e.deltaMode === 1 ? e.deltaY * 36 : e.deltaMode === 2 ? e.deltaY * 500 : e.deltaY
+  // The first mouse wheel notch reacts immediately; touchpads accumulate
+  // small deltas. A short refractory period prevents one gesture from
+  // expanding into dozens of queued page turns.
+  if (Math.abs(wheelDelta) < 24 || now - lastWheelTime < 90) return
+  wheelDelta = 0
+  lastWheelTime = now
+  if (navigationPending < 3) navigate(direction > 0 ? 'next' : 'prev')
+}
+document.addEventListener?.('wheel', onPageWheel, { passive: false })
+view.addEventListener('load', e => {
+  const doc = e.detail?.doc
+  if (doc) doc.addEventListener('wheel', onPageWheel, { passive: false })
+})
+
+function flattenTOC(items, depth, out) {
+  depth = depth || 0
+  out = out || []
+  ;(items || []).forEach(function (it) {
+    if (!it) return
+    out.push({ label: it.label || '', href: it.href || '', depth: depth })
+    if (it.subitems) flattenTOC(it.subitems, depth + 1, out)
+  })
+  return out
+}
+
+async function start() {
+  try {
+    // A File-like object backed by byte ranges: ZIP central directories and
+    // MOBI/PDF records can be read without downloading the complete book.
+    const { openRemoteFile } = await import('./remote-file.mjs')
+    fileSource = await openRemoteFile(src, name, type)
+    if (disposed) { fileSource.destroy(); return }
+    await view.open(fileSource)
+    if (disposed) return
+
+    // The host sends its settings and saved position before the first render.
+    // The fallback keeps viewer.html useful when opened outside the app.
+    send('ready')
+    startupTimer = setTimeout(() => startupResolve({}), 1200)
+    const config = await startupConfig
+    clearTimeout(startupTimer)
+    if (disposed) return
+    fontSize = Math.max(12, Math.min(40, Number(config.font) || fontSize))
+    columns = Math.max(1, Number(config.columns) || columns)
+    flow = config.flow === 'scrolled' ? 'scrolled' : flow
+    if (typeof config.fg === 'string' && typeof config.bg === 'string') {
+      fg = config.fg; bg = config.bg
+    }
+    ready = true
+    await applySettings()
+    const lastLocation = typeof config.cfi === 'string' ? config.cfi : null
+    await view.init({ lastLocation: lastLocation || undefined })
+    if (!lastLocation && Number(config.fraction) > 0 && view.goToFraction) {
+      await view.goToFraction(Math.min(1, Math.max(0, Number(config.fraction))))
+    }
+    if (disposed) return
+    if (boot) boot.style.display = 'none'
+    send('opened', {
+      title: (view.book && view.book.metadata && view.book.metadata.title) || name,
+      sections: (view.book && view.book.sections && view.book.sections.length) || 0,
+      fixedLayout: !!view.isFixedLayout
+    })
+    send('toc', { items: flattenTOC(view.book && view.book.toc) })
+  } catch (e) {
+    fileSource?.destroy()
+    if (disposed) return
+    if (boot) boot.textContent = '无法打开：' + ((e && e.message) || e)
+    send('error', { message: String((e && e.message) || e) })
+  }
+}
+
+window.addEventListener('message', function (ev) {
+  if (ev.source !== parent) return
+  const m = ev.data || {}
+  if (m.target !== 'vl-reader') return
+  if (m.action === 'configure') { startupResolve(m); return }
+  if (m.action === 'next' || m.action === 'prev') navigate(m.action)
+  else if (m.action === 'goFraction' || m.action === 'goHref' || m.action === 'goPage') seek(m.action, m.value)
+  else if (m.action === 'setFont') {
+    fontSize = Math.max(12, Math.min(40, Number(m.value) || 18))
+    scheduleSettings()
+  }
+  else if (m.action === 'setColumnCount') {
+    columns = Math.max(1, Number(m.value) || 1)
+    scheduleSettings()
+  }
+  else if (m.action === 'setFlow') {
+    flow = m.value === 'scrolled' ? 'scrolled' : 'paginated'
+    scheduleSettings()
+  }
+  else if (m.action === 'setTheme') { fg = m.fg; bg = m.bg; scheduleSettings() }
+})
+
+window.addEventListener('pagehide', () => {
+  disposed = true
+  ready = false
+  clearTimeout(startupTimer)
+  startupResolve({})
+  if (settingsFrame !== null) cancelAnimationFrame(settingsFrame)
+  fileSource?.destroy()
+  const book = view.book
+  try { view.close() } catch (e) { /* Already closing. */ }
+  try { book?.destroy?.() } catch (e) { /* Already closed. */ }
+})
+
+start()
+</script>
+</body>
+</html>
