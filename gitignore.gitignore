@@ -1,0 +1,33 @@
+# Dependencies and build output
+node_modules/
+dist/
+out/
+release/
+app-new.asar
+*.asar
+*.log
+
+# Local secrets and configuration
+.env
+.env.*
+!.env.example
+settings.json
+
+# Local collection and reading data (not application source)
+data.json
+characters.json
+arts.json
+library.json
+books/
+bookcovers/
+covers/
+shots/
+chars/
+artcovers/
+
+# User backup artifacts
+*.zip
+虚空图书馆备份-*.json
+*.bak
+.DS_Store
+Thumbs.db
